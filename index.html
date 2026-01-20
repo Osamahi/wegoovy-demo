@@ -26,8 +26,9 @@
 
             <div class="chat-shell">
                 <div class="loading-overlay" id="loadingOverlay">
-                    <div class="spinner"></div>
-                    <div class="loading-text">Connecting to Wegovy...</div>
+                    <img src="wegovy_hd.png" alt="Wegovy" class="loading-logo">
+                    <div class="loading-line" aria-hidden="true"></div>
+                    <div class="loading-text" id="loadingText">Connecting to Wegovy...</div>
                 </div>
 
                 <div class="chat-messages" id="chatMessages"></div>
@@ -87,6 +88,7 @@
             typingIndicator: document.getElementById('typingIndicator'),
             errorMessage: document.getElementById('errorMessage'),
             loadingOverlay: document.getElementById('loadingOverlay'),
+            loadingText: document.getElementById('loadingText'),
             newConversationBtn: document.getElementById('newConversationBtn')
         };
 
@@ -128,6 +130,13 @@
             setTimeout(() => {
                 elements.errorMessage.classList.remove('active');
             }, 5000);
+        }
+
+        function showLoading(text) {
+            if (text) {
+                elements.loadingText.textContent = text;
+            }
+            elements.loadingOverlay.classList.remove('hidden');
         }
 
         function hideLoading() {
@@ -274,6 +283,7 @@
         async function startNewConversation() {
             try {
                 elements.newConversationBtn.disabled = true;
+                showLoading('Starting new conversation...');
 
                 localStorage.removeItem('mojeeb_conversation_id');
                 state.conversationId = null;
@@ -305,12 +315,14 @@
                     false
                 );
 
+                hideLoading();
                 elements.newConversationBtn.disabled = false;
                 elements.chatInput.focus();
             } catch (error) {
                 console.error('Error starting new conversation:', error);
                 showError('Failed to start new conversation. Please try again.');
                 elements.newConversationBtn.disabled = false;
+                hideLoading();
             }
         }
 
