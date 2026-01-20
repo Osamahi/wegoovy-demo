@@ -260,8 +260,8 @@
         }
 
         function updateNewChatVisibility() {
-            const hasMessages = elements.chatMessages.children.length > 0;
-            elements.newConversationBtn.classList.toggle('visible', hasMessages);
+            const messageCount = elements.chatMessages.querySelectorAll('.message').length;
+            elements.newConversationBtn.classList.toggle('visible', messageCount > 2);
         }
 
         async function startNewConversation() {
