@@ -166,12 +166,47 @@
                 bubble.textContent = content;
             }
 
+            const metaRow = document.createElement('div');
+            metaRow.className = 'message-meta';
+
             const timeDiv = document.createElement('div');
             timeDiv.className = 'message-time';
             timeDiv.textContent = timestamp ? formatTime(timestamp) : formatTime(new Date());
 
+            const copyButton = document.createElement('button');
+            copyButton.className = 'copy-button';
+            copyButton.type = 'button';
+            copyButton.setAttribute('aria-label', 'Copy message');
+            copyButton.title = 'Copy';
+            copyButton.innerHTML = `
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 9h10v10H9zM5 5h10v10H5z"/>
+                </svg>
+            `;
+
+            const copyText = type === 'assistant'
+                ? (() => {
+                    const temp = document.createElement('div');
+                    temp.innerHTML = sanitizeAndParse(content);
+                    return temp.textContent || '';
+                })()
+                : content;
+
+            copyButton.addEventListener('click', async () => {
+                try {
+                    await navigator.clipboard.writeText(copyText);
+                    copyButton.classList.add('copied');
+                    setTimeout(() => copyButton.classList.remove('copied'), 1200);
+                } catch (error) {
+                    console.error('Copy failed:', error);
+                }
+            });
+
+            metaRow.appendChild(timeDiv);
+            metaRow.appendChild(copyButton);
+
             contentWrapper.appendChild(bubble);
-            contentWrapper.appendChild(timeDiv);
+            contentWrapper.appendChild(metaRow);
 
             messageDiv.appendChild(contentWrapper);
             elements.chatMessages.appendChild(messageDiv);

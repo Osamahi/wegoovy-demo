@@ -91,17 +91,32 @@ body::before {
     background: #ffffff url("bottom_high.png") no-repeat left bottom;
     background-size: 100% auto;
     border-radius: 18px;
-    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+    box-shadow:
+        0 18px 40px rgba(15, 23, 42, 0.14),
+        inset 0 1px 2px rgba(255, 255, 255, 0.7),
+        inset 0 -12px 24px rgba(15, 23, 42, 0.05);
     border: 1px solid rgba(15, 23, 42, 0.06);
     position: relative;
     overflow: hidden;
+}
+
+.blank-rectangle::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 160px;
+    background: linear-gradient(120deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 60%);
+    pointer-events: none;
+    z-index: 1;
 }
 
 .logo {
     position: absolute;
     left: 28px;
     top: 44px;
-    width: 180px;
+    width: 190px;
     height: auto;
     display: block;
     z-index: 2;
@@ -190,7 +205,7 @@ body::before {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    background: transparent;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(233, 247, 252, 0.5) 35%, rgba(255, 255, 255, 0.95) 100%);
     mask-image: linear-gradient(to bottom, transparent 0, black 28px, black calc(100% - 28px), transparent 100%);
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 28px, black calc(100% - 28px), transparent 100%);
 }
@@ -254,7 +269,52 @@ body::before {
 
 .message.user .message-time {
     text-align: right;
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(26, 37, 54, 0.5);
+}
+
+.message-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.message.user .message-meta {
+    justify-content: flex-end;
+}
+
+.copy-button {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: rgba(26, 37, 54, 0.45);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+    opacity: 0.5;
+}
+
+.copy-button:hover {
+    color: rgba(13, 163, 207, 0.9);
+    transform: translateY(-1px);
+    opacity: 1;
+}
+
+.copy-button.copied {
+    color: rgba(13, 163, 207, 1);
+    opacity: 1;
+}
+
+.copy-button svg {
+    width: 12px;
+    height: 12px;
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
 }
 
 .typing-indicator {
@@ -306,14 +366,16 @@ body::before {
     flex: 1;
     padding: 14px 16px;
     padding-right: 60px;
-    border-radius: 16px;
-    border: 1px solid rgba(13, 163, 207, 0.2);
+    border-radius: 18px;
+    border: 1px solid rgba(13, 163, 207, 0.16);
     font-size: var(--body-md);
     line-height: var(--body-md-line);
     resize: none;
     max-height: 120px;
     min-height: 52px;
     font-family: inherit;
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
 
 .chat-input:focus {
@@ -326,7 +388,7 @@ body::before {
     position: absolute;
     right: 12px;
     top: 50%;
-    transform: translateY(-50%) scale(0.96);
+    transform: translateY(-52%) scale(0.96);
     width: 36px;
     height: 36px;
     border-radius: 14px;
@@ -344,7 +406,7 @@ body::before {
 }
 
 .send-button:hover:not(:disabled) {
-    transform: translateY(-50%) scale(1);
+    transform: translateY(-54%) scale(1);
     box-shadow: 0 12px 24px rgba(15, 23, 42, 0.22);
 }
 
@@ -431,6 +493,11 @@ body::before {
 .message-bubble ol {
     margin: 10px 0;
     padding-left: 22px;
+    line-height: 1.6;
+}
+
+.message-bubble li {
+    margin-bottom: 6px;
 }
 
 .message-bubble code {
