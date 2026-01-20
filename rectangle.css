@@ -123,6 +123,8 @@ body {
     flex-direction: column;
     gap: 16px;
     background: transparent;
+    mask-image: linear-gradient(to bottom, transparent 0, black 28px);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 28px);
 }
 
 .chat-messages::-webkit-scrollbar {
