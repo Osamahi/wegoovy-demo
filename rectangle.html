@@ -225,6 +225,7 @@
 
             messageDiv.appendChild(contentWrapper);
             elements.chatMessages.appendChild(messageDiv);
+            elements.chatMessages.appendChild(elements.typingIndicator);
 
             if (messageId) {
                 state.renderedMessageIds.add(messageId);
@@ -249,6 +250,7 @@
         }
 
         function showTypingIndicator() {
+            elements.chatMessages.appendChild(elements.typingIndicator);
             elements.typingIndicator.classList.add('active');
             scrollToBottom();
         }
@@ -273,7 +275,6 @@
 
                 const typingIndicator = elements.typingIndicator;
                 elements.chatMessages.innerHTML = '';
-                elements.chatMessages.appendChild(typingIndicator);
                 hideTypingIndicator();
                 updateNewChatVisibility();
 
