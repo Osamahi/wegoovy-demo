@@ -36,6 +36,16 @@ body {
     display: block;
 }
 
+.logo {
+    position: absolute;
+    left: 28px;
+    top: 44px;
+    width: 180px;
+    height: auto;
+    display: block;
+    z-index: 2;
+}
+
 .top-band {
     position: absolute;
     right: 0;
