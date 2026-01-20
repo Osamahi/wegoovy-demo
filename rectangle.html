@@ -241,7 +241,14 @@
             for (const msg of optimisticMessages) {
                 const bubble = msg.querySelector('.message-bubble');
                 if (bubble && bubble.textContent === serverMessage.message) {
-                    msg.remove();
+                    msg.dataset.messageId = serverMessage.id;
+                    delete msg.dataset.optimistic;
+
+                    const timeDiv = msg.querySelector('.message-time');
+                    if (timeDiv) {
+                        timeDiv.textContent = formatTime(serverMessage.created_at);
+                    }
+
                     return true;
                 }
             }
@@ -426,14 +433,10 @@
                     const message = payload.new;
 
                     if (replaceOptimisticMessage(message)) {
-                        appendMessage(
-                            message.message,
-                            message.sender_id === state.guestId ? 'user' : 'assistant',
-                            message.id,
-                            false,
-                            message.created_at
-                        );
-                    } else {
+                        return;
+                    }
+
+                    {
                         if (message.sender_id !== state.guestId) {
                             hideTypingIndicator();
                             appendMessage(
