@@ -183,6 +183,7 @@
                     <path d="M9 9h10v10H9zM5 5h10v10H5z"/>
                 </svg>
             `;
+            copyButton.dataset.icon = 'copy';
 
             const copyText = type === 'assistant'
                 ? (() => {
@@ -196,7 +197,21 @@
                 try {
                     await navigator.clipboard.writeText(copyText);
                     copyButton.classList.add('copied');
-                    setTimeout(() => copyButton.classList.remove('copied'), 1200);
+                    copyButton.innerHTML = `
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M5 13l4 4L19 7"/>
+                        </svg>
+                    `;
+                    copyButton.dataset.icon = 'check';
+                    setTimeout(() => {
+                        copyButton.classList.remove('copied');
+                        copyButton.innerHTML = `
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M9 9h10v10H9zM5 5h10v10H5z"/>
+                            </svg>
+                        `;
+                        copyButton.dataset.icon = 'copy';
+                    }, 1200);
                 } catch (error) {
                     console.error('Copy failed:', error);
                 }

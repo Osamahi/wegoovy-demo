@@ -275,7 +275,7 @@ body::before {
 .message-meta {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
 }
 
 .message.user .message-meta {
@@ -283,8 +283,8 @@ body::before {
 }
 
 .copy-button {
-    width: 20px;
-    height: 20px;
+    width: 30px;
+    height: 30px;
     border-radius: 6px;
     border: none;
     background: transparent;
@@ -309,8 +309,8 @@ body::before {
 }
 
 .copy-button svg {
-    width: 12px;
-    height: 12px;
+    width: 18px;
+    height: 18px;
     display: block;
     fill: none;
     stroke: currentColor;
