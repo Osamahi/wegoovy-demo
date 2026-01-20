@@ -87,7 +87,7 @@ body::before {
 
 .blank-rectangle {
     width: 100%;
-    height: 820px;
+    height: 80vh;
     background: #ffffff url("bottom_high.png") no-repeat left bottom;
     background-size: 100% auto;
     border-radius: 18px;
