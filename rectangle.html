@@ -11,6 +11,12 @@
 </head>
 <body>
     <div class="canvas">
+        <div class="top-controls">
+            <button id="newConversationBtn" class="new-chat-btn" type="button" aria-label="Start a new chat" title="New conversation">
+                <span class="new-chat-label">New conversation</span>
+                <span class="new-chat-plus" aria-hidden="true">+</span>
+            </button>
+        </div>
         <div class="blank-rectangle" aria-label="Blank rectangle">
             <img src="wegovy_hd.png" alt="Wegovy" class="logo">
             <img src="top.png" alt="" class="top-band" aria-hidden="true">
@@ -76,7 +82,8 @@
             sendButton: document.getElementById('sendButton'),
             typingIndicator: document.getElementById('typingIndicator'),
             errorMessage: document.getElementById('errorMessage'),
-            loadingOverlay: document.getElementById('loadingOverlay')
+            loadingOverlay: document.getElementById('loadingOverlay'),
+            newConversationBtn: document.getElementById('newConversationBtn')
         };
 
         function generateUUID() {
@@ -173,6 +180,7 @@
             }
 
             scrollToBottom();
+            updateNewChatVisibility();
         }
 
         function replaceOptimisticMessage(serverMessage) {
@@ -196,6 +204,56 @@
 
         function hideTypingIndicator() {
             elements.typingIndicator.classList.remove('active');
+        }
+
+        function updateNewChatVisibility() {
+            const hasMessages = elements.chatMessages.children.length > 0;
+            elements.newConversationBtn.classList.toggle('visible', hasMessages);
+        }
+
+        async function startNewConversation() {
+            try {
+                elements.newConversationBtn.disabled = true;
+
+                localStorage.removeItem('mojeeb_conversation_id');
+                state.conversationId = null;
+
+                state.renderedMessageIds.clear();
+
+                const typingIndicator = elements.typingIndicator;
+                elements.chatMessages.innerHTML = '';
+                elements.chatMessages.appendChild(typingIndicator);
+                hideTypingIndicator();
+                updateNewChatVisibility();
+
+                if (state.typingChannel) {
+                    await state.typingChannel.unsubscribe();
+                    state.typingChannel = null;
+                }
+
+                if (state.messageChannel) {
+                    await state.messageChannel.unsubscribe();
+                    state.messageChannel = null;
+                }
+
+                await initiateConversation();
+                subscribeToMessages();
+                subscribeToTypingIndicator();
+
+                appendMessage(
+                    "Hi, I'm your Wegovy AI assistant. How can I help you today?",
+                    'assistant',
+                    'welcome-' + Date.now(),
+                    false
+                );
+
+                elements.newConversationBtn.disabled = false;
+                elements.chatInput.focus();
+            } catch (error) {
+                console.error('Error starting new conversation:', error);
+                showError('Failed to start new conversation. Please try again.');
+                elements.newConversationBtn.disabled = false;
+            }
         }
 
         async function initiateConversation() {
@@ -376,6 +434,8 @@
                             message.created_at
                         );
                     });
+                } else {
+                    updateNewChatVisibility();
                 }
             } catch (error) {
                 console.error('Error fetching messages:', error);
@@ -401,6 +461,10 @@
             elements.chatInput.style.height = elements.chatInput.scrollHeight + 'px';
             const hasText = elements.chatInput.value.trim().length > 0;
             elements.chatInput.parentElement.classList.toggle('has-text', hasText);
+        }
+
+        function handleNewConversationClick() {
+            startNewConversation();
         }
 
         async function initialize() {
@@ -429,6 +493,7 @@
                 elements.sendButton.addEventListener('click', handleSendClick);
                 elements.chatInput.addEventListener('keypress', handleInputKeyPress);
                 elements.chatInput.addEventListener('input', handleInputChange);
+                elements.newConversationBtn.addEventListener('click', handleNewConversationClick);
                 elements.chatInput.focus();
 
             } catch (error) {
