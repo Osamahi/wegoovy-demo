@@ -382,6 +382,43 @@
             background: none;
             padding: 0;
         }
+
+        .new-conversation-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .new-conversation-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .new-conversation-btn:active {
+            transform: translateY(0);
+        }
+
+        .new-conversation-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .chat-header {
+            position: relative;
+        }
     </style>
 </head>
 <body>
@@ -394,6 +431,13 @@
         <div class="chat-header">
             <h1>Novo Agent</h1>
             <p><span class="status-indicator"></span>Online & Ready</p>
+            <button id="newConversationBtn" class="new-conversation-btn" title="Start a new conversation">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                New Chat
+            </button>
         </div>
 
         <div class="chat-messages" id="chatMessages">
@@ -458,7 +502,8 @@
             sendButton: document.getElementById('sendButton'),
             typingIndicator: document.getElementById('typingIndicator'),
             errorMessage: document.getElementById('errorMessage'),
-            loadingOverlay: document.getElementById('loadingOverlay')
+            loadingOverlay: document.getElementById('loadingOverlay'),
+            newConversationBtn: document.getElementById('newConversationBtn')
         };
 
         // ============================================
@@ -707,6 +752,80 @@
             }
         }
 
+        async function startNewConversation() {
+            try {
+                // Disable button during transition
+                elements.newConversationBtn.disabled = true;
+                elements.newConversationBtn.textContent = 'Starting...';
+
+                // Step 1: Clear conversation ID from localStorage
+                localStorage.removeItem('mojeeb_conversation_id');
+                state.conversationId = null;
+
+                // Step 2: Clear rendered message IDs
+                state.renderedMessageIds.clear();
+
+                // Step 3: Clear chat display (keep typing indicator)
+                const typingIndicator = elements.typingIndicator;
+                elements.chatMessages.innerHTML = '';
+                elements.chatMessages.appendChild(typingIndicator);
+                hideTypingIndicator();
+
+                // Step 4: Unsubscribe from old Supabase channels
+                if (state.typingChannel) {
+                    await state.typingChannel.unsubscribe();
+                    state.typingChannel = null;
+                }
+
+                if (state.messageChannel) {
+                    await state.messageChannel.unsubscribe();
+                    state.messageChannel = null;
+                }
+
+                // Step 5: Create new conversation
+                await initiateConversation();
+
+                // Step 6: Subscribe to new conversation
+                subscribeToMessages();
+                subscribeToTypingIndicator();
+
+                // Step 7: Show welcome message
+                appendMessage(
+                    "Hi! I'm Novo, your AI assistant. How can I help you today?",
+                    'assistant',
+                    'welcome-' + Date.now(),
+                    false
+                );
+
+                // Re-enable button
+                elements.newConversationBtn.disabled = false;
+                elements.newConversationBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    New Chat
+                `;
+
+                // Focus input
+                elements.chatInput.focus();
+
+            } catch (error) {
+                console.error('Error starting new conversation:', error);
+                showError('Failed to start new conversation. Please try again.');
+
+                // Re-enable button
+                elements.newConversationBtn.disabled = false;
+                elements.newConversationBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    New Chat
+                `;
+            }
+        }
+
         // ============================================
         // SUPABASE INTEGRATION
         // ============================================
@@ -830,6 +949,10 @@
             elements.chatInput.style.height = elements.chatInput.scrollHeight + 'px';
         }
 
+        function handleNewConversationClick() {
+            startNewConversation();
+        }
+
         // ============================================
         // INITIALIZATION
         // ============================================
@@ -872,6 +995,7 @@
                 elements.sendButton.addEventListener('click', handleSendClick);
                 elements.chatInput.addEventListener('keypress', handleInputKeyPress);
                 elements.chatInput.addEventListener('input', handleInputChange);
+                elements.newConversationBtn.addEventListener('click', handleNewConversationClick);
 
                 // Focus input
                 elements.chatInput.focus();
