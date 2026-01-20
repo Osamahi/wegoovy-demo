@@ -132,10 +132,11 @@ body::before {
 }
 
 .top-controls {
+    position: absolute;
+    top: 44px;
+    right: 42px;
     display: flex;
-    justify-content: center;
-    width: 100%;
-    margin-bottom: 6px;
+    justify-content: flex-end;
     z-index: 3;
 }
 
@@ -597,8 +598,7 @@ body::before {
         top: 28px;
         right: 24px;
         left: auto;
-        width: auto;
-        margin-bottom: 0;
+        transform: none;
     }
 
     .blank-rectangle {
