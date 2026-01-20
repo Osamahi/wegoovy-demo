@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Novo Agent - Chat Demo</title>
+    <title>Wegovy - AI Assistant</title>
 
     <!-- External Dependencies (CDN) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
@@ -17,12 +17,12 @@
     <div class="chat-container">
         <div class="loading-overlay" id="loadingOverlay">
             <div class="spinner"></div>
-            <div class="loading-text">Connecting to Novo...</div>
+            <div class="loading-text">Connecting to Wegovy...</div>
         </div>
 
         <div class="chat-header">
-            <h1>Novo Agent</h1>
-            <p><span class="status-indicator"></span>Online & Ready</p>
+            <img src="wegovy-logo.png" alt="Wegovy" class="wegovy-logo">
+            <p class="chat-subtitle"><span class="status-indicator"></span>AI Assistant - Here to Help</p>
             <button id="newConversationBtn" class="new-conversation-btn" title="Start a new conversation">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -383,7 +383,7 @@
 
                 // Step 7: Show welcome message
                 appendMessage(
-                    "Hi! I'm Novo, your AI assistant. How can I help you today?",
+                    "Hi! I'm your Wegovy AI assistant. I'm here to help answer your questions about Wegovy and support you on your wellness journey. How can I help you today?",
                     'assistant',
                     'welcome-' + Date.now(),
                     false
@@ -576,7 +576,7 @@
                 // Show welcome message if no history
                 if (elements.chatMessages.children.length === 0) {
                     appendMessage(
-                        "Hi! I'm Novo, your AI assistant. How can I help you today?",
+                        "Hi! I'm your Wegovy AI assistant. I'm here to help answer your questions about Wegovy and support you on your wellness journey. How can I help you today?",
                         'assistant',
                         'welcome-' + Date.now(),
                         false

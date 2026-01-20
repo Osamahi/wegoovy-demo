@@ -41,6 +41,18 @@ body {
     margin-bottom: 5px;
 }
 
+.wegovy-logo {
+    height: 50px;
+    width: auto;
+    margin-bottom: 12px;
+    filter: brightness(0) invert(1);
+}
+
+.chat-subtitle {
+    font-size: 0.875rem;
+    opacity: 0.9;
+}
+
 .chat-header p {
     font-size: 0.875rem;
     opacity: 0.9;
