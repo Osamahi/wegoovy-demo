@@ -42,7 +42,6 @@
         </div>
 
         <div class="typing-indicator" id="typingIndicator">
-            <div class="message-avatar">N</div>
             <div class="typing-dots">
                 <span class="typing-dot"></span>
                 <span class="typing-dot"></span>
@@ -179,10 +178,6 @@
                 messageDiv.dataset.optimistic = 'true';
             }
 
-            const avatar = document.createElement('div');
-            avatar.className = 'message-avatar';
-            avatar.textContent = type === 'user' ? 'U' : 'N';
-
             const contentWrapper = document.createElement('div');
             contentWrapper.className = 'message-content';
 
@@ -202,7 +197,6 @@
             contentWrapper.appendChild(bubble);
             contentWrapper.appendChild(timeDiv);
 
-            messageDiv.appendChild(avatar);
             messageDiv.appendChild(contentWrapper);
 
             elements.chatMessages.appendChild(messageDiv);
