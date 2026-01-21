@@ -47,16 +47,34 @@
 
                 <div class="chat-input-area">
                     <div class="input-wrapper">
+                        <button id="cancelRecordingBtn" class="recording-cancel" type="button" aria-label="Cancel recording" title="Cancel recording">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M6 6l12 12M18 6l-12 12"/>
+                            </svg>
+                        </button>
                         <textarea
                             id="chatInput"
                             class="chat-input"
                             placeholder="Type your message..."
                             rows="1"
                         ></textarea>
-                        <button id="sendButton" class="send-button" aria-label="Send message" title="Send">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M12 19V7M6 13l6-6 6 6"/>
-                            </svg>
+                        <div class="recording-indicator" id="recordingIndicator" aria-hidden="true">
+                            <span class="recording-dot"></span>
+                            <span class="recording-label" id="recordingLabel">Recording</span>
+                            <span class="recording-waveform" id="recordingWaveform" aria-hidden="true"></span>
+                            <span class="recording-timer" id="recordingTimer">0:00</span>
+                        </div>
+                        <button id="sendButton" class="send-button mode-record" aria-label="Record voice message" title="Record">
+                            <span class="icon icon-send" aria-hidden="true">
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M12 19V7M6 13l6-6 6 6"/>
+                                </svg>
+                            </span>
+                            <span class="icon icon-mic" aria-hidden="true">
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zM19 11a7 7 0 0 1-14 0M12 18v3M8 21h8"/>
+                                </svg>
+                            </span>
                         </button>
                     </div>
                 </div>
@@ -80,13 +98,32 @@
             messageChannel: null,
             typingChannel: null,
             renderedMessageIds: new Set(),
-            isSending: false
+            isSending: false,
+            isRecording: false,
+            mediaRecorder: null,
+            recordingChunks: [],
+            recordingStream: null,
+            recordingPlaceholder: '',
+            recordingStartedAt: 0,
+            recordingTimerId: null,
+            recordingDurationSec: 0,
+            audioContext: null,
+            analyser: null,
+            waveformFrameId: null,
+            waveformBars: null,
+            waveformHeights: null,
+            recordingCancelled: false
         };
 
         const elements = {
             chatMessages: document.getElementById('chatMessages'),
             chatInput: document.getElementById('chatInput'),
             sendButton: document.getElementById('sendButton'),
+            cancelRecordingBtn: document.getElementById('cancelRecordingBtn'),
+            recordingIndicator: document.getElementById('recordingIndicator'),
+            recordingTimer: document.getElementById('recordingTimer'),
+            recordingLabel: document.getElementById('recordingLabel'),
+            recordingWaveform: document.getElementById('recordingWaveform'),
             typingIndicator: document.getElementById('typingIndicator'),
             errorMessage: document.getElementById('errorMessage'),
             loadingOverlay: document.getElementById('loadingOverlay'),
@@ -155,7 +192,183 @@
             }
         }
 
-        function appendMessage(content, type, messageId, isOptimistic = false, timestamp = null) {
+        function parseAttachments(raw) {
+            if (!raw) {
+                return null;
+            }
+            if (typeof raw === 'string') {
+                try {
+                    return JSON.parse(raw);
+                } catch (error) {
+                    console.warn('Failed to parse attachments:', error);
+                    return null;
+                }
+            }
+            if (typeof raw === 'object') {
+                return raw;
+            }
+            return null;
+        }
+
+        function hasAudioAttachments(attachments) {
+            return Boolean(attachments && Array.isArray(attachments.audio) && attachments.audio.length > 0);
+        }
+
+        function formatAudioTime(seconds) {
+            if (!Number.isFinite(seconds)) {
+                return '0:00';
+            }
+            const totalSeconds = Math.max(0, Math.floor(seconds));
+            const minutes = Math.floor(totalSeconds / 60);
+            const remainder = totalSeconds % 60;
+            return `${minutes}:${remainder.toString().padStart(2, '0')}`;
+        }
+
+        function pauseAllAudio(except) {
+            const audios = document.querySelectorAll('audio[data-voice]');
+            audios.forEach(audio => {
+                if (audio !== except) {
+                    audio.pause();
+                }
+            });
+        }
+
+        function buildWaveformBars(count) {
+            const heights = [];
+            for (let i = 0; i < count; i += 1) {
+                const value = Math.abs(Math.sin(i * 0.6)) * 0.75 + 0.2;
+                heights.push(Math.round(value * 100));
+            }
+            return heights;
+        }
+
+        function createAudioMessage(attachment) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'audio-message';
+
+            const playButton = document.createElement('button');
+            playButton.className = 'audio-play';
+            playButton.type = 'button';
+            playButton.setAttribute('aria-label', 'Play voice note');
+            playButton.innerHTML = `
+                <span class="audio-icon audio-icon-play">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M8 5l11 7-11 7z"/>
+                    </svg>
+                </span>
+                <span class="audio-icon audio-icon-pause">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M7 5h4v14H7zM13 5h4v14h-4z"/>
+                    </svg>
+                </span>
+            `;
+
+            const waveform = document.createElement('div');
+            waveform.className = 'audio-waveform';
+            const barHeights = buildWaveformBars(30);
+            barHeights.forEach(height => {
+                const bar = document.createElement('span');
+                bar.className = 'audio-bar';
+                bar.style.height = `${height}%`;
+                waveform.appendChild(bar);
+            });
+
+            const timeLabel = document.createElement('div');
+            timeLabel.className = 'audio-time';
+            timeLabel.textContent = '0:00';
+
+            const audio = document.createElement('audio');
+            audio.dataset.voice = 'true';
+            audio.preload = 'metadata';
+            audio.src = attachment.url;
+
+            let duration = 0;
+
+            const updateProgress = () => {
+                if (!duration) {
+                    return;
+                }
+                const progress = Math.min(1, audio.currentTime / duration);
+                const activeCount = Math.round(progress * barHeights.length);
+                const bars = waveform.querySelectorAll('.audio-bar');
+                bars.forEach((bar, index) => {
+                    bar.classList.toggle('active', index < activeCount);
+                });
+                timeLabel.textContent = `${formatAudioTime(audio.currentTime)} / ${formatAudioTime(duration)}`;
+            };
+
+            audio.addEventListener('loadedmetadata', () => {
+                duration = audio.duration || attachment.duration || 0;
+                timeLabel.textContent = `0:00 / ${formatAudioTime(duration)}`;
+            });
+
+            audio.addEventListener('timeupdate', updateProgress);
+            audio.addEventListener('ended', () => {
+                playButton.classList.remove('playing');
+                playButton.setAttribute('aria-label', 'Play voice note');
+                audio.currentTime = 0;
+                updateProgress();
+            });
+
+            playButton.addEventListener('click', () => {
+                if (audio.paused) {
+                    pauseAllAudio(audio);
+                    audio.play();
+                    playButton.classList.add('playing');
+                    playButton.setAttribute('aria-label', 'Pause voice note');
+                } else {
+                    audio.pause();
+                    playButton.classList.remove('playing');
+                    playButton.setAttribute('aria-label', 'Play voice note');
+                }
+            });
+
+            waveform.addEventListener('click', (event) => {
+                if (!duration) {
+                    return;
+                }
+                const rect = waveform.getBoundingClientRect();
+                const percent = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+                audio.currentTime = percent * duration;
+                updateProgress();
+            });
+
+            wrapper.appendChild(playButton);
+            wrapper.appendChild(waveform);
+            wrapper.appendChild(timeLabel);
+            wrapper.appendChild(audio);
+            return wrapper;
+        }
+
+        function buildMessageBubble(content, type, attachments) {
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+
+            const parsedAttachments = parseAttachments(attachments);
+            if (hasAudioAttachments(parsedAttachments)) {
+                if (content && content.trim().length > 0) {
+                    const text = document.createElement('p');
+                    text.textContent = content;
+                    bubble.appendChild(text);
+                }
+
+                parsedAttachments.audio.forEach(attachment => {
+                    if (attachment && attachment.url) {
+                        bubble.appendChild(createAudioMessage(attachment));
+                    }
+                });
+                return bubble;
+            }
+
+            if (type === 'assistant') {
+                bubble.innerHTML = sanitizeAndParse(content);
+            } else {
+                bubble.textContent = content;
+            }
+            return bubble;
+        }
+
+        function appendMessage(content, type, messageId, isOptimistic = false, timestamp = null, attachments = null) {
             if (messageId && state.renderedMessageIds.has(messageId)) {
                 return;
             }
@@ -171,14 +384,7 @@
             const contentWrapper = document.createElement('div');
             contentWrapper.className = 'message-content';
 
-            const bubble = document.createElement('div');
-            bubble.className = 'message-bubble';
-
-            if (type === 'assistant') {
-                bubble.innerHTML = sanitizeAndParse(content);
-            } else {
-                bubble.textContent = content;
-            }
+            const bubble = buildMessageBubble(content, type, attachments);
 
             const metaRow = document.createElement('div');
             metaRow.className = 'message-meta';
@@ -248,6 +454,29 @@
 
         function replaceOptimisticMessage(serverMessage) {
             const optimisticMessages = elements.chatMessages.querySelectorAll('[data-optimistic="true"]');
+            const attachments = parseAttachments(serverMessage.attachments);
+
+            if (hasAudioAttachments(attachments)) {
+                const optimisticAudio = elements.chatMessages.querySelector('[data-optimistic-audio="true"]');
+                if (optimisticAudio) {
+                    optimisticAudio.dataset.messageId = serverMessage.id;
+                    delete optimisticAudio.dataset.optimistic;
+                    delete optimisticAudio.dataset.optimisticAudio;
+
+                    const bubble = optimisticAudio.querySelector('.message-bubble');
+                    if (bubble) {
+                        const newBubble = buildMessageBubble(serverMessage.message || '', 'user', attachments);
+                        bubble.replaceWith(newBubble);
+                    }
+
+                    const timeDiv = optimisticAudio.querySelector('.message-time');
+                    if (timeDiv) {
+                        timeDiv.textContent = formatTime(serverMessage.created_at);
+                    }
+
+                    return true;
+                }
+            }
 
             for (const msg of optimisticMessages) {
                 const bubble = msg.querySelector('.message-bubble');
@@ -314,7 +543,9 @@
                     "Hi, I'm your Wegovy AI assistant. How can I help you today?",
                     'assistant',
                     'welcome-' + Date.now(),
-                    false
+                    false,
+                    null,
+                    null
                 );
 
                 hideLoading();
@@ -387,6 +618,7 @@
 
                 elements.chatInput.value = '';
                 elements.chatInput.style.height = 'auto';
+                updateComposerMode();
 
                 const response = await fetch(`${CONFIG.API_BASE}/chat/generate-response`, {
                     method: 'POST',
@@ -456,7 +688,8 @@
                             'assistant',
                             message.id,
                             false,
-                            message.created_at
+                            message.created_at,
+                            message.attachments
                         );
                     }
                 })
@@ -497,7 +730,8 @@
                             message.sender_id === state.guestId ? 'user' : 'assistant',
                             message.id,
                             false,
-                            message.created_at
+                            message.created_at,
+                            message.attachments
                         );
                     });
                 } else {
@@ -508,17 +742,393 @@
             }
         }
 
+        function setSendButtonMode(mode) {
+            elements.sendButton.classList.remove('mode-send', 'mode-record', 'recording');
+
+            if (mode === 'send') {
+                elements.sendButton.classList.add('mode-send');
+                elements.sendButton.setAttribute('aria-label', 'Send message');
+                elements.sendButton.title = 'Send';
+                return;
+            }
+
+            elements.sendButton.classList.add('mode-record');
+            elements.sendButton.setAttribute('aria-label', 'Record voice message');
+            elements.sendButton.title = 'Record';
+        }
+
+        function updateComposerMode() {
+            if (state.isRecording) {
+                setSendButtonMode('send');
+                elements.sendButton.classList.add('recording');
+                return;
+            }
+
+            const hasText = elements.chatInput.value.trim().length > 0;
+            setSendButtonMode(hasText ? 'send' : 'record');
+        }
+
+        function getRecordingMimeType() {
+            if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                return 'audio/mp4';
+            }
+            if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+                return 'audio/ogg;codecs=opus';
+            }
+            if (MediaRecorder.isTypeSupported('audio/aac')) {
+                return 'audio/aac';
+            }
+            if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                return 'audio/webm;codecs=opus';
+            }
+            return '';
+        }
+
+        function formatRecordingDuration(durationMs) {
+            const totalSeconds = Math.floor(durationMs / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        function setupWaveform(stream) {
+            if (!elements.recordingWaveform) {
+                return;
+            }
+
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) {
+                return;
+            }
+
+            state.audioContext = new AudioContextClass();
+            if (state.audioContext.state === 'suspended') {
+                state.audioContext.resume();
+            }
+            const source = state.audioContext.createMediaStreamSource(stream);
+            state.analyser = state.audioContext.createAnalyser();
+            state.analyser.fftSize = 256;
+            state.analyser.smoothingTimeConstant = 0.85;
+            state.analyser.minDecibels = -90;
+            state.analyser.maxDecibels = -10;
+
+            const gainNode = state.audioContext.createGain();
+            gainNode.gain.value = 0;
+            source.connect(state.analyser);
+            state.analyser.connect(gainNode);
+            gainNode.connect(state.audioContext.destination);
+
+            const barCount = 28;
+            elements.recordingWaveform.innerHTML = '';
+            const bars = [];
+            for (let i = 0; i < barCount; i += 1) {
+                const bar = document.createElement('span');
+                bar.className = 'wave-bar';
+                bar.style.height = '15%';
+                elements.recordingWaveform.appendChild(bar);
+                bars.push(bar);
+            }
+            state.waveformBars = bars;
+            state.waveformHeights = Array(barCount).fill(15);
+
+            const dataArray = new Uint8Array(state.analyser.frequencyBinCount);
+            const animate = () => {
+                if (!state.analyser || !state.waveformBars || !state.waveformHeights) {
+                    return;
+                }
+                state.analyser.getByteFrequencyData(dataArray);
+                let sum = 0;
+                for (let i = 0; i < dataArray.length; i += 1) {
+                    sum += dataArray[i];
+                }
+                const average = sum / dataArray.length;
+                const amplitude = Math.min((average / 255) * 200, 100);
+
+                state.waveformHeights.shift();
+                state.waveformHeights.push(amplitude);
+
+                for (let i = 0; i < bars.length; i += 1) {
+                    const height = Math.max(8, state.waveformHeights[i]);
+                    bars[i].style.height = `${height}%`;
+                }
+
+                state.waveformFrameId = requestAnimationFrame(animate);
+            };
+
+            state.waveformFrameId = requestAnimationFrame(animate);
+        }
+
+        function cleanupWaveform() {
+            if (state.waveformFrameId) {
+                cancelAnimationFrame(state.waveformFrameId);
+                state.waveformFrameId = null;
+            }
+
+            if (state.analyser) {
+                state.analyser.disconnect();
+                state.analyser = null;
+            }
+
+            if (state.audioContext && state.audioContext.state !== 'closed') {
+                state.audioContext.close();
+            }
+            state.audioContext = null;
+
+            if (elements.recordingWaveform) {
+                elements.recordingWaveform.innerHTML = '';
+            }
+            state.waveformBars = null;
+            state.waveformHeights = null;
+        }
+
+        function showRecordingIndicator() {
+            const wrapper = elements.chatInput.parentElement;
+            if (!wrapper) {
+                return;
+            }
+            wrapper.classList.add('recording-active');
+            elements.recordingLabel.textContent = 'Recording';
+            elements.recordingTimer.textContent = '0:00';
+        }
+
+        function hideRecordingIndicator() {
+            const wrapper = elements.chatInput.parentElement;
+            if (!wrapper) {
+                return;
+            }
+            wrapper.classList.remove('recording-active');
+        }
+
+        function cleanupRecording() {
+            if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+                state.mediaRecorder.stop();
+            }
+
+            if (state.recordingStream) {
+                state.recordingStream.getTracks().forEach(track => track.stop());
+                state.recordingStream = null;
+            }
+
+            state.mediaRecorder = null;
+            state.recordingChunks = [];
+            state.isRecording = false;
+            elements.chatInput.disabled = false;
+            if (state.recordingPlaceholder) {
+                elements.chatInput.placeholder = state.recordingPlaceholder;
+                state.recordingPlaceholder = '';
+            }
+            if (state.recordingTimerId) {
+                clearInterval(state.recordingTimerId);
+                state.recordingTimerId = null;
+            }
+            state.recordingStartedAt = 0;
+            state.recordingDurationSec = 0;
+            state.recordingCancelled = false;
+            cleanupWaveform();
+            hideRecordingIndicator();
+            updateComposerMode();
+        }
+
+        async function startRecording() {
+            if (state.isRecording || state.isSending) return;
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showError('Microphone is not available in this browser.');
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                state.recordingStream = stream;
+
+                const mimeType = getRecordingMimeType();
+                const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+                state.mediaRecorder = recorder;
+                state.recordingChunks = [];
+                state.isRecording = true;
+                state.recordingCancelled = false;
+                state.recordingPlaceholder = elements.chatInput.placeholder;
+                elements.chatInput.placeholder = 'Recording voice note...';
+                elements.chatInput.disabled = true;
+                state.recordingStartedAt = Date.now();
+                state.recordingDurationSec = 0;
+                showRecordingIndicator();
+                setupWaveform(stream);
+                updateComposerMode();
+
+                recorder.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) {
+                        state.recordingChunks.push(event.data);
+                    }
+                };
+
+                recorder.onstop = async () => {
+                    const recordedChunks = state.recordingChunks.slice();
+                    const durationSec = state.recordingStartedAt
+                        ? Math.max(0, Math.floor((Date.now() - state.recordingStartedAt) / 1000))
+                        : state.recordingDurationSec;
+                    const wasCancelled = state.recordingCancelled;
+                    cleanupRecording();
+
+                    if (wasCancelled || recordedChunks.length === 0) {
+                        return;
+                    }
+
+                    const blobType = mimeType || recordedChunks[0].type || 'audio/webm';
+                    const audioBlob = new Blob(recordedChunks, { type: blobType });
+                    await sendVoiceNote(audioBlob, durationSec);
+                };
+
+                if (state.recordingTimerId) {
+                    clearInterval(state.recordingTimerId);
+                }
+                state.recordingTimerId = setInterval(() => {
+                    if (!state.recordingStartedAt) {
+                        return;
+                    }
+                    const elapsed = Date.now() - state.recordingStartedAt;
+                    elements.recordingTimer.textContent = formatRecordingDuration(elapsed);
+                    state.recordingDurationSec = Math.floor(elapsed / 1000);
+                }, 250);
+
+                recorder.start();
+            } catch (error) {
+                console.error('Error starting recording:', error);
+                showError('Unable to access microphone.');
+                cleanupRecording();
+            }
+        }
+
+        function stopRecordingAndSend() {
+            if (!state.isRecording || !state.mediaRecorder) {
+                return;
+            }
+            if (state.mediaRecorder.state !== 'inactive') {
+                state.mediaRecorder.stop();
+            }
+        }
+
+        function cancelRecording() {
+            if (!state.isRecording) {
+                return;
+            }
+            state.recordingCancelled = true;
+            if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+                state.mediaRecorder.stop();
+                return;
+            }
+            cleanupRecording();
+        }
+
+        async function uploadAudio(audioBlob, messageId, durationSec) {
+            const fileType = audioBlob.type || 'audio/webm';
+            const extension = fileType.split('/')[1] || 'webm';
+            const audioFile = new File([audioBlob], `voice-${Date.now()}.${extension}`, {
+                type: fileType
+            });
+
+            const formData = new FormData();
+            formData.append('File', audioFile);
+            formData.append('ConversationId', state.conversationId);
+            formData.append('MessageId', messageId);
+            if (typeof durationSec === 'number' && Number.isFinite(durationSec) && durationSec > 0) {
+                formData.append('Duration', durationSec.toString());
+            }
+
+            const response = await fetch(`${CONFIG.API_BASE}/chat/upload-audio`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to upload audio');
+            }
+
+            const data = await response.json();
+            if (!data || !data.success || !data.attachment) {
+                throw new Error('Audio upload failed');
+            }
+
+            return data.attachment;
+        }
+
+        async function sendVoiceNote(audioBlob, durationSec) {
+            if (state.isSending) return;
+
+            state.isSending = true;
+            elements.sendButton.disabled = true;
+            elements.recordingLabel.textContent = 'Uploading';
+            showRecordingIndicator();
+
+            const tempId = `temp-${Date.now()}`;
+            const uploadId = generateUUID();
+            appendMessage('Voice message', 'user', tempId, true);
+            const optimisticMsg = elements.chatMessages.querySelector(`[data-message-id="${tempId}"]`);
+            if (optimisticMsg) {
+                optimisticMsg.dataset.optimisticAudio = 'true';
+            }
+
+            try {
+                const attachment = await uploadAudio(audioBlob, uploadId, durationSec);
+                const attachments = JSON.stringify({ audio: [attachment] });
+
+                const response = await fetch(`${CONFIG.API_BASE}/chat/generate-response`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        agentId: state.agentId,
+                        conversationId: state.conversationId,
+                        message: '',
+                        messageType: 1,
+                        senderId: state.guestId,
+                        senderRole: 1,
+                        attachments: attachments
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to send voice note');
+                }
+            } catch (error) {
+                console.error('Error sending voice note:', error);
+                showError('Failed to send voice note. Please try again.');
+
+                const optimisticMsg = elements.chatMessages.querySelector(`[data-message-id="${tempId}"]`);
+                if (optimisticMsg) {
+                    optimisticMsg.remove();
+                }
+            } finally {
+                state.isSending = false;
+                elements.sendButton.disabled = false;
+                elements.chatInput.focus();
+                hideRecordingIndicator();
+                updateComposerMode();
+            }
+        }
+
         function handleSendClick() {
             const message = elements.chatInput.value.trim();
+
+            if (state.isRecording) {
+                stopRecordingAndSend();
+                return;
+            }
+
             if (message) {
                 sendMessage(message);
+                return;
             }
+
+            startRecording();
         }
 
         function handleInputKeyPress(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                handleSendClick();
+                if (elements.chatInput.value.trim()) {
+                    handleSendClick();
+                }
             }
         }
 
@@ -527,6 +1137,7 @@
             elements.chatInput.style.height = elements.chatInput.scrollHeight + 'px';
             const hasText = elements.chatInput.value.trim().length > 0;
             elements.chatInput.parentElement.classList.toggle('has-text', hasText);
+            updateComposerMode();
         }
 
         function handleNewConversationClick() {
@@ -552,7 +1163,9 @@
                         "Hi, I'm your Wegovy AI assistant. How can I help you today?",
                         'assistant',
                         'welcome-' + Date.now(),
-                        false
+                        false,
+                        null,
+                        null
                     );
                 }
 
@@ -560,6 +1173,8 @@
                 elements.chatInput.addEventListener('keypress', handleInputKeyPress);
                 elements.chatInput.addEventListener('input', handleInputChange);
                 elements.newConversationBtn.addEventListener('click', handleNewConversationClick);
+                elements.cancelRecordingBtn.addEventListener('click', cancelRecording);
+                updateComposerMode();
 
                 // Mobile keyboard handling
                 if (/mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent)) {
