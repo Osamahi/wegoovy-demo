@@ -1306,6 +1306,11 @@
                 elements.cancelRecordingBtn.addEventListener('click', cancelRecording);
                 updateComposerMode();
 
+                const setViewportHeightVar = () => {
+                    document.documentElement.style.setProperty('--vvh', `${window.innerHeight}px`);
+                };
+                setViewportHeightVar();
+
                 // Mobile keyboard handling
                 if (/mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent)) {
                     const inputArea = document.querySelector('.chat-input-area');
@@ -1364,6 +1369,7 @@
                         viewport.addEventListener('scroll', scheduleInputPositionUpdate);
                         window.addEventListener('orientationchange', scheduleInputPositionUpdate);
                         window.addEventListener('pagehide', clearPendingViewportUpdate);
+                        window.addEventListener('resize', setViewportHeightVar);
                         document.addEventListener('visibilitychange', () => {
                             if (document.hidden) {
                                 clearPendingViewportUpdate();
@@ -1391,6 +1397,7 @@
                             }
                             lastWindowHeight = currentHeight;
                         });
+                        window.addEventListener('resize', setViewportHeightVar);
                     }
                 }
 

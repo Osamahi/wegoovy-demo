@@ -6,6 +6,7 @@
     --body-sm-line: 1.313rem;
     --body-xs: 0.75rem;
     --body-xs-line: 1.125rem;
+    --vvh: 100vh;
 }
 
 @font-face {
@@ -901,7 +902,7 @@ body::before {
     }
 
     .chat-messages {
-        padding-bottom: 120px;
+        padding-bottom: calc(160px + env(safe-area-inset-bottom));
         min-height: 0;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
