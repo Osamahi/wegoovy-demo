@@ -570,6 +570,7 @@
                         inputArea.classList.add('keyboard-aware');
                         const viewport = window.visualViewport;
                         let updateTimer = null;
+                        let savedScrollY = null;
 
                         function updateInputPosition() {
                             const keyboardHeight = Math.max(
@@ -577,6 +578,11 @@
                                 window.innerHeight - viewport.height - viewport.offsetTop
                             );
                             inputArea.style.bottom = `${keyboardHeight}px`;
+
+                            if (keyboardHeight < 20 && savedScrollY !== null && document.activeElement !== elements.chatInput) {
+                                window.scrollTo(0, savedScrollY);
+                                savedScrollY = null;
+                            }
                         }
 
                         function scheduleInputPositionUpdate() {
@@ -592,6 +598,20 @@
                                 updateTimer = null;
                             }
                         }
+
+                        elements.chatInput.addEventListener('focus', () => {
+                            savedScrollY = window.scrollY;
+                        });
+
+                        elements.chatInput.addEventListener('blur', () => {
+                            if (savedScrollY === null) {
+                                return;
+                            }
+                            setTimeout(() => {
+                                window.scrollTo(0, savedScrollY);
+                                savedScrollY = null;
+                            }, 0);
+                        });
 
                         updateInputPosition();
                         viewport.addEventListener('resize', scheduleInputPositionUpdate);
