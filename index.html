@@ -281,7 +281,12 @@
 
             const timeLabel = document.createElement('div');
             timeLabel.className = 'audio-time';
-            timeLabel.textContent = '0:00';
+            if (isFailed) {
+                timeLabel.textContent = 'Upload failed';
+            } else {
+                timeLabel.textContent = 'loading';
+                timeLabel.classList.add('loading');
+            }
 
             let audio = null;
             if (hasUrl) {
@@ -307,9 +312,16 @@
             };
 
             if (audio) {
+                playButton.classList.add('loading');
                 audio.addEventListener('loadedmetadata', () => {
                     duration = audio.duration || attachment.duration || 0;
-                    timeLabel.textContent = `0:00 / ${formatAudioTime(duration)}`;
+                    timeLabel.classList.add('fading');
+                    setTimeout(() => {
+                        timeLabel.textContent = `0:00 / ${formatAudioTime(duration)}`;
+                        timeLabel.classList.remove('loading');
+                        timeLabel.classList.remove('fading');
+                        playButton.classList.remove('loading');
+                    }, 180);
                 });
 
                 audio.addEventListener('timeupdate', updateProgress);
@@ -349,7 +361,7 @@
 
             if (isLoading) {
                 playButton.classList.add('loading');
-                timeLabel.textContent = '0:00';
+                timeLabel.textContent = 'loading';
             }
 
             if (isFailed) {

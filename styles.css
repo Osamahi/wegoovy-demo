@@ -663,6 +663,16 @@ body::before {
     color: rgba(255, 255, 255, 0.9);
     font-variant-numeric: tabular-nums;
     text-align: right;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.audio-time.loading {
+    letter-spacing: 0.3px;
+}
+
+.audio-time.fading {
+    opacity: 0;
+    transform: translateY(2px);
 }
 
 .audio-message.failed {
@@ -881,8 +891,8 @@ body::before {
     .chat-shell {
         top: 140px;
         position: relative;
-        height: auto;
-        min-height: calc(100vh - 140px);
+        height: calc(100vh - 140px);
+        min-height: 0;
     }
 
     .new-chat-btn {
@@ -892,6 +902,9 @@ body::before {
 
     .chat-messages {
         padding-bottom: 120px;
+        min-height: 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     .chat-input-area {
@@ -903,6 +916,7 @@ body::before {
         padding-bottom: calc(18px + env(safe-area-inset-bottom));
         z-index: 100;
         margin-top: auto;
+        flex-shrink: 0;
     }
 
     .chat-input-area.keyboard-aware {
