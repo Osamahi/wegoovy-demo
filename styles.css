@@ -616,6 +616,25 @@ body::before {
     display: block;
 }
 
+.audio-play .audio-icon-loading {
+    display: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #ffffff;
+    animation: spin 0.8s linear infinite;
+}
+
+.audio-play.loading .audio-icon-play,
+.audio-play.loading .audio-icon-pause {
+    display: none;
+}
+
+.audio-play.loading .audio-icon-loading {
+    display: block;
+}
+
 .audio-waveform {
     flex: 1;
     display: inline-flex;
@@ -644,6 +663,20 @@ body::before {
     color: rgba(255, 255, 255, 0.9);
     font-variant-numeric: tabular-nums;
     text-align: right;
+}
+
+.audio-message.failed {
+    opacity: 0.9;
+}
+
+.audio-retry {
+    border: none;
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 0.7rem;
+    cursor: pointer;
 }
 
 .error-message {

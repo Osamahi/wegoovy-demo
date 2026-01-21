@@ -112,7 +112,8 @@
             waveformFrameId: null,
             waveformBars: null,
             waveformHeights: null,
-            recordingCancelled: false
+            recordingCancelled: false,
+            pendingVoiceNotes: new Map()
         };
 
         const elements = {
@@ -242,14 +243,18 @@
             return heights;
         }
 
-        function createAudioMessage(attachment) {
+        function createAudioMessage(attachment, options = {}) {
             const wrapper = document.createElement('div');
             wrapper.className = 'audio-message';
+            const isLoading = Boolean(attachment && attachment.loading);
+            const isFailed = Boolean(attachment && attachment.failed);
+            const hasUrl = Boolean(attachment && attachment.url);
 
             const playButton = document.createElement('button');
             playButton.className = 'audio-play';
             playButton.type = 'button';
             playButton.setAttribute('aria-label', 'Play voice note');
+            playButton.disabled = isLoading || isFailed || !hasUrl;
             playButton.innerHTML = `
                 <span class="audio-icon audio-icon-play">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -261,6 +266,7 @@
                         <path d="M7 5h4v14H7zM13 5h4v14h-4z"/>
                     </svg>
                 </span>
+                <span class="audio-icon audio-icon-loading" aria-hidden="true"></span>
             `;
 
             const waveform = document.createElement('div');
@@ -277,12 +283,15 @@
             timeLabel.className = 'audio-time';
             timeLabel.textContent = '0:00';
 
-            const audio = document.createElement('audio');
-            audio.dataset.voice = 'true';
-            audio.preload = 'metadata';
-            audio.src = attachment.url;
+            let audio = null;
+            if (hasUrl) {
+                audio = document.createElement('audio');
+                audio.dataset.voice = 'true';
+                audio.preload = 'metadata';
+                audio.src = attachment.url;
+            }
 
-            let duration = 0;
+            let duration = attachment?.duration || 0;
 
             const updateProgress = () => {
                 if (!duration) {
@@ -297,20 +306,25 @@
                 timeLabel.textContent = `${formatAudioTime(audio.currentTime)} / ${formatAudioTime(duration)}`;
             };
 
-            audio.addEventListener('loadedmetadata', () => {
-                duration = audio.duration || attachment.duration || 0;
-                timeLabel.textContent = `0:00 / ${formatAudioTime(duration)}`;
-            });
+            if (audio) {
+                audio.addEventListener('loadedmetadata', () => {
+                    duration = audio.duration || attachment.duration || 0;
+                    timeLabel.textContent = `0:00 / ${formatAudioTime(duration)}`;
+                });
 
-            audio.addEventListener('timeupdate', updateProgress);
-            audio.addEventListener('ended', () => {
-                playButton.classList.remove('playing');
-                playButton.setAttribute('aria-label', 'Play voice note');
-                audio.currentTime = 0;
-                updateProgress();
-            });
+                audio.addEventListener('timeupdate', updateProgress);
+                audio.addEventListener('ended', () => {
+                    playButton.classList.remove('playing');
+                    playButton.setAttribute('aria-label', 'Play voice note');
+                    audio.currentTime = 0;
+                    updateProgress();
+                });
+            }
 
             playButton.addEventListener('click', () => {
+                if (!audio || playButton.disabled) {
+                    return;
+                }
                 if (audio.paused) {
                     pauseAllAudio(audio);
                     audio.play();
@@ -324,7 +338,7 @@
             });
 
             waveform.addEventListener('click', (event) => {
-                if (!duration) {
+                if (!audio || !duration) {
                     return;
                 }
                 const rect = waveform.getBoundingClientRect();
@@ -333,14 +347,37 @@
                 updateProgress();
             });
 
+            if (isLoading) {
+                playButton.classList.add('loading');
+                timeLabel.textContent = '0:00';
+            }
+
+            if (isFailed) {
+                playButton.classList.remove('loading');
+                wrapper.classList.add('failed');
+                timeLabel.textContent = 'Upload failed';
+                const retry = document.createElement('button');
+                retry.type = 'button';
+                retry.className = 'audio-retry';
+                retry.textContent = 'Retry';
+                retry.addEventListener('click', () => {
+                    if (typeof options.onRetry === 'function') {
+                        options.onRetry();
+                    }
+                });
+                wrapper.appendChild(retry);
+            }
+
             wrapper.appendChild(playButton);
             wrapper.appendChild(waveform);
             wrapper.appendChild(timeLabel);
-            wrapper.appendChild(audio);
+            if (audio) {
+                wrapper.appendChild(audio);
+            }
             return wrapper;
         }
 
-        function buildMessageBubble(content, type, attachments) {
+        function buildMessageBubble(content, type, attachments, options = {}) {
             const bubble = document.createElement('div');
             bubble.className = 'message-bubble';
 
@@ -353,8 +390,8 @@
                 }
 
                 parsedAttachments.audio.forEach(attachment => {
-                    if (attachment && attachment.url) {
-                        bubble.appendChild(createAudioMessage(attachment));
+                    if (attachment) {
+                        bubble.appendChild(createAudioMessage(attachment, options));
                     }
                 });
                 return bubble;
@@ -368,7 +405,7 @@
             return bubble;
         }
 
-        function appendMessage(content, type, messageId, isOptimistic = false, timestamp = null, attachments = null) {
+        function appendMessage(content, type, messageId, isOptimistic = false, timestamp = null, attachments = null, options = {}) {
             if (messageId && state.renderedMessageIds.has(messageId)) {
                 return;
             }
@@ -384,7 +421,7 @@
             const contentWrapper = document.createElement('div');
             contentWrapper.className = 'message-content';
 
-            const bubble = buildMessageBubble(content, type, attachments);
+            const bubble = buildMessageBubble(content, type, attachments, options);
 
             const metaRow = document.createElement('div');
             metaRow.className = 'message-meta';
@@ -459,9 +496,13 @@
             if (hasAudioAttachments(attachments)) {
                 const optimisticAudio = elements.chatMessages.querySelector('[data-optimistic-audio="true"]');
                 if (optimisticAudio) {
+                    const tempId = optimisticAudio.dataset.messageId;
                     optimisticAudio.dataset.messageId = serverMessage.id;
                     delete optimisticAudio.dataset.optimistic;
                     delete optimisticAudio.dataset.optimisticAudio;
+                    if (tempId) {
+                        state.pendingVoiceNotes.delete(tempId);
+                    }
 
                     const bubble = optimisticAudio.querySelector('.message-bubble');
                     if (bubble) {
@@ -881,14 +922,16 @@
             state.waveformHeights = null;
         }
 
-        function showRecordingIndicator() {
+        function showRecordingIndicator(label) {
             const wrapper = elements.chatInput.parentElement;
             if (!wrapper) {
                 return;
             }
             wrapper.classList.add('recording-active');
-            elements.recordingLabel.textContent = 'Recording';
-            elements.recordingTimer.textContent = '0:00';
+            elements.recordingLabel.textContent = label || 'Recording';
+            if (!label) {
+                elements.recordingTimer.textContent = '0:00';
+            }
         }
 
         function hideRecordingIndicator() {
@@ -1019,6 +1062,76 @@
             cleanupRecording();
         }
 
+        function updateOptimisticVoiceMessage(tempId, attachmentState, options = {}) {
+            const messageNode = elements.chatMessages.querySelector(`[data-message-id="${tempId}"]`);
+            if (!messageNode) {
+                return;
+            }
+            const bubble = messageNode.querySelector('.message-bubble');
+            if (!bubble) {
+                return;
+            }
+            const newBubble = buildMessageBubble('', 'user', { audio: [attachmentState] }, options);
+            bubble.replaceWith(newBubble);
+        }
+
+        function markVoiceNoteFailed(tempId) {
+            updateOptimisticVoiceMessage(
+                tempId,
+                { failed: true },
+                { onRetry: () => retryVoiceNote(tempId) }
+            );
+        }
+
+        async function retryVoiceNote(tempId) {
+            if (state.isSending) {
+                return;
+            }
+            const pending = state.pendingVoiceNotes.get(tempId);
+            if (!pending) {
+                return;
+            }
+            updateOptimisticVoiceMessage(
+                tempId,
+                { loading: true },
+                { onRetry: () => retryVoiceNote(tempId) }
+            );
+            state.isSending = true;
+            elements.sendButton.disabled = true;
+            try {
+                const uploadId = generateUUID();
+                const attachment = await uploadAudio(pending.blob, uploadId, pending.durationSec);
+                const attachments = JSON.stringify({ audio: [attachment] });
+
+                const response = await fetch(`${CONFIG.API_BASE}/chat/generate-response`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        agentId: state.agentId,
+                        conversationId: state.conversationId,
+                        message: '',
+                        messageType: 1,
+                        senderId: state.guestId,
+                        senderRole: 1,
+                        attachments: attachments
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to send voice note');
+                }
+            } catch (error) {
+                console.error('Error retrying voice note:', error);
+                markVoiceNoteFailed(tempId);
+            } finally {
+                state.isSending = false;
+                elements.sendButton.disabled = false;
+                updateComposerMode();
+            }
+        }
+
         async function uploadAudio(audioBlob, messageId, durationSec) {
             const fileType = audioBlob.type || 'audio/webm';
             const extension = fileType.split('/')[1] || 'webm';
@@ -1056,22 +1169,30 @@
 
             state.isSending = true;
             elements.sendButton.disabled = true;
-            elements.recordingLabel.textContent = 'Uploading';
-            showRecordingIndicator();
+            setSendButtonMode('record');
+            elements.sendButton.classList.remove('recording');
 
             const tempId = `temp-${Date.now()}`;
             const uploadId = generateUUID();
-            appendMessage('Voice message', 'user', tempId, true);
+            const optimisticAttachments = { audio: [{ loading: true }] };
+            appendMessage('', 'user', tempId, true, null, optimisticAttachments, {
+                onRetry: () => retryVoiceNote(tempId)
+            });
             const optimisticMsg = elements.chatMessages.querySelector(`[data-message-id="${tempId}"]`);
             if (optimisticMsg) {
                 optimisticMsg.dataset.optimisticAudio = 'true';
             }
 
+            hideRecordingIndicator();
+            updateComposerMode();
+
+            state.pendingVoiceNotes.set(tempId, { blob: audioBlob, durationSec });
+
             try {
                 const attachment = await uploadAudio(audioBlob, uploadId, durationSec);
                 const attachments = JSON.stringify({ audio: [attachment] });
 
-                const response = await fetch(`${CONFIG.API_BASE}/chat/generate-response`, {
+                const responsePromise = fetch(`${CONFIG.API_BASE}/chat/generate-response`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -1087,17 +1208,14 @@
                     })
                 });
 
+                const response = await responsePromise;
                 if (!response.ok) {
                     throw new Error('Failed to send voice note');
                 }
             } catch (error) {
                 console.error('Error sending voice note:', error);
+                markVoiceNoteFailed(tempId);
                 showError('Failed to send voice note. Please try again.');
-
-                const optimisticMsg = elements.chatMessages.querySelector(`[data-message-id="${tempId}"]`);
-                if (optimisticMsg) {
-                    optimisticMsg.remove();
-                }
             } finally {
                 state.isSending = false;
                 elements.sendButton.disabled = false;
