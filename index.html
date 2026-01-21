@@ -52,6 +52,13 @@
                                 <path d="M6 6l12 12M18 6l-12 12"/>
                             </svg>
                         </button>
+                        <button id="attachImageBtn" class="attach-button" type="button" aria-label="Attach images" title="Attach images">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 5v14M5 12h14"/>
+                            </svg>
+                        </button>
+                        <input id="imageInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden>
+                        <div class="composer-attachments" id="composerAttachments"></div>
                         <textarea
                             id="chatInput"
                             class="chat-input"
@@ -75,6 +82,7 @@
                                     <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zM19 11a7 7 0 0 1-14 0M12 18v3M8 21h8"/>
                                 </svg>
                             </span>
+                            <span class="icon icon-loading" aria-hidden="true"></span>
                         </button>
                     </div>
                 </div>
@@ -113,7 +121,9 @@
             waveformBars: null,
             waveformHeights: null,
             recordingCancelled: false,
-            pendingVoiceNotes: new Map()
+            pendingVoiceNotes: new Map(),
+            pendingImages: [],
+            pendingImageUploads: new Map()
         };
 
         const elements = {
@@ -121,6 +131,9 @@
             chatInput: document.getElementById('chatInput'),
             sendButton: document.getElementById('sendButton'),
             cancelRecordingBtn: document.getElementById('cancelRecordingBtn'),
+            attachImageBtn: document.getElementById('attachImageBtn'),
+            imageInput: document.getElementById('imageInput'),
+            composerAttachments: document.getElementById('composerAttachments'),
             recordingIndicator: document.getElementById('recordingIndicator'),
             recordingTimer: document.getElementById('recordingTimer'),
             recordingLabel: document.getElementById('recordingLabel'),
@@ -215,6 +228,23 @@
             return Boolean(attachments && Array.isArray(attachments.audio) && attachments.audio.length > 0);
         }
 
+        function getImageAttachments(attachments) {
+            if (!attachments) {
+                return [];
+            }
+            if (Array.isArray(attachments.images)) {
+                return attachments.images;
+            }
+            if (Array.isArray(attachments.Images)) {
+                return attachments.Images;
+            }
+            return [];
+        }
+
+        function hasImageAttachments(attachments) {
+            return getImageAttachments(attachments).length > 0;
+        }
+
         function formatAudioTime(seconds) {
             if (!Number.isFinite(seconds)) {
                 return '0:00';
@@ -241,6 +271,37 @@
                 heights.push(Math.round(value * 100));
             }
             return heights;
+        }
+
+        function createImageStrip(images) {
+            const strip = document.createElement('div');
+            strip.className = 'message-images';
+
+            images.forEach((image) => {
+                if (!image || !image.url) {
+                    return;
+                }
+                const item = document.createElement('div');
+                item.className = 'message-image';
+                const img = document.createElement('img');
+                img.src = image.url;
+                img.alt = image.original_file_name || 'Attachment';
+                item.classList.add('loading');
+                if (image.loading) {
+                    item.classList.add('loading');
+                }
+                img.addEventListener('load', () => {
+                    item.classList.remove('loading');
+                });
+                img.addEventListener('error', () => {
+                    item.classList.remove('loading');
+                    item.classList.add('error');
+                });
+                item.appendChild(img);
+                strip.appendChild(item);
+            });
+
+            return strip;
         }
 
         function createAudioMessage(attachment, options = {}) {
@@ -394,25 +455,35 @@
             bubble.className = 'message-bubble';
 
             const parsedAttachments = parseAttachments(attachments);
-            if (hasAudioAttachments(parsedAttachments)) {
-                if (content && content.trim().length > 0) {
-                    const text = document.createElement('p');
-                    text.textContent = content;
-                    bubble.appendChild(text);
-                }
+            const images = getImageAttachments(parsedAttachments);
+            if (images.length > 0) {
+                bubble.appendChild(createImageStrip(images));
+            }
 
+            if (hasAudioAttachments(parsedAttachments)) {
                 parsedAttachments.audio.forEach(attachment => {
                     if (attachment) {
                         bubble.appendChild(createAudioMessage(attachment, options));
                     }
                 });
-                return bubble;
             }
 
-            if (type === 'assistant') {
-                bubble.innerHTML = sanitizeAndParse(content);
-            } else {
-                bubble.textContent = content;
+            if (content && content.trim().length > 0) {
+                if (type === 'assistant') {
+                    const contentBlock = document.createElement('div');
+                    contentBlock.innerHTML = sanitizeAndParse(content);
+                    bubble.appendChild(contentBlock);
+                } else {
+                    const text = document.createElement('p');
+                    text.textContent = content;
+                    bubble.appendChild(text);
+                }
+            } else if (!hasAudioAttachments(parsedAttachments) && images.length === 0) {
+                if (type === 'assistant') {
+                    bubble.innerHTML = sanitizeAndParse(content);
+                } else {
+                    bubble.textContent = content;
+                }
             }
             return bubble;
         }
@@ -525,6 +596,37 @@
                     const timeDiv = optimisticAudio.querySelector('.message-time');
                     if (timeDiv) {
                         timeDiv.textContent = formatTime(serverMessage.created_at);
+                    }
+
+                    return true;
+                }
+            }
+
+            if (hasImageAttachments(attachments)) {
+                const optimisticImages = elements.chatMessages.querySelector('[data-optimistic-images="true"]');
+                if (optimisticImages) {
+                    const tempId = optimisticImages.dataset.messageId;
+                    optimisticImages.dataset.messageId = serverMessage.id;
+                    delete optimisticImages.dataset.optimistic;
+                    delete optimisticImages.dataset.optimisticImages;
+
+                    const bubble = optimisticImages.querySelector('.message-bubble');
+                    if (bubble) {
+                        const newBubble = buildMessageBubble(serverMessage.message || '', 'user', attachments);
+                        bubble.replaceWith(newBubble);
+                    }
+
+                    const timeDiv = optimisticImages.querySelector('.message-time');
+                    if (timeDiv) {
+                        timeDiv.textContent = formatTime(serverMessage.created_at);
+                    }
+
+                    if (tempId) {
+                        const pending = state.pendingImageUploads.get(tempId);
+                        if (pending) {
+                            pending.previewUrls.forEach(url => URL.revokeObjectURL(url));
+                            state.pendingImageUploads.delete(tempId);
+                        }
                     }
 
                     return true;
@@ -659,15 +761,16 @@
             return data;
         }
 
-        async function sendMessage(message) {
-            if (state.isSending || !message.trim()) return;
+        async function sendMessage(message, attachments = null) {
+            const hasMessage = message.trim().length > 0;
+            if (state.isSending || (!hasMessage && !attachments)) return;
 
-            state.isSending = true;
-            elements.sendButton.disabled = true;
+            setSendingState(true);
+
+            const tempId = `temp-${Date.now()}`;
 
             try {
-                const tempId = `temp-${Date.now()}`;
-                appendMessage(message, 'user', tempId, true);
+                appendMessage(message, 'user', tempId, true, null, attachments);
 
                 elements.chatInput.value = '';
                 elements.chatInput.style.height = 'auto';
@@ -684,7 +787,8 @@
                         message: message,
                         messageType: 0,
                         senderId: state.guestId,
-                        senderRole: 1
+                        senderRole: 1,
+                        attachments: attachments ? JSON.stringify(attachments) : null
                     })
                 });
 
@@ -700,8 +804,7 @@
                     optimisticMsg.remove();
                 }
             } finally {
-                state.isSending = false;
-                elements.sendButton.disabled = false;
+                setSendingState(false);
                 elements.chatInput.focus();
             }
         }
@@ -818,7 +921,14 @@
             }
 
             const hasText = elements.chatInput.value.trim().length > 0;
-            setSendButtonMode(hasText ? 'send' : 'record');
+            const hasImages = state.pendingImages.length > 0;
+            setSendButtonMode(hasText || hasImages ? 'send' : 'record');
+        }
+
+        function setSendingState(isSending) {
+            state.isSending = isSending;
+            elements.sendButton.disabled = isSending;
+            elements.sendButton.classList.toggle('sending', isSending);
         }
 
         function getRecordingMimeType() {
@@ -1074,6 +1184,70 @@
             cleanupRecording();
         }
 
+        function renderComposerImages() {
+            if (!elements.composerAttachments) {
+                return;
+            }
+            elements.composerAttachments.innerHTML = '';
+            if (state.pendingImages.length === 0) {
+                elements.composerAttachments.classList.remove('active');
+                return;
+            }
+            elements.composerAttachments.classList.add('active');
+            state.pendingImages.forEach((item, index) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'composer-image';
+                const img = document.createElement('img');
+                img.src = item.previewUrl;
+                img.alt = item.file.name;
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'composer-image-remove';
+                removeBtn.setAttribute('aria-label', 'Remove image');
+                removeBtn.innerHTML = `
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6 6l12 12M18 6l-12 12"/>
+                    </svg>
+                `;
+                removeBtn.addEventListener('click', () => {
+                    const [removed] = state.pendingImages.splice(index, 1);
+                    if (removed && removed.previewUrl) {
+                        URL.revokeObjectURL(removed.previewUrl);
+                    }
+                    renderComposerImages();
+                    updateComposerMode();
+                });
+                wrapper.appendChild(img);
+                wrapper.appendChild(removeBtn);
+                elements.composerAttachments.appendChild(wrapper);
+            });
+        }
+
+        function handleImageSelect(event) {
+            const files = Array.from(event.target.files || []);
+            if (files.length === 0) {
+                return;
+            }
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            const maxSizeBytes = 10_485_880;
+
+            files.forEach((file) => {
+                if (!allowedTypes.includes(file.type)) {
+                    showError('Unsupported image type. Use JPG, PNG, GIF, or WebP.');
+                    return;
+                }
+                if (file.size > maxSizeBytes) {
+                    showError('Image too large. Max size is 10MB.');
+                    return;
+                }
+                const previewUrl = URL.createObjectURL(file);
+                state.pendingImages.push({ file, previewUrl });
+            });
+            elements.imageInput.value = '';
+            renderComposerImages();
+            updateComposerMode();
+        }
+
         function updateOptimisticVoiceMessage(tempId, attachmentState, options = {}) {
             const messageNode = elements.chatMessages.querySelector(`[data-message-id="${tempId}"]`);
             if (!messageNode) {
@@ -1108,8 +1282,7 @@
                 { loading: true },
                 { onRetry: () => retryVoiceNote(tempId) }
             );
-            state.isSending = true;
-            elements.sendButton.disabled = true;
+            setSendingState(true);
             try {
                 const uploadId = generateUUID();
                 const attachment = await uploadAudio(pending.blob, uploadId, pending.durationSec);
@@ -1138,8 +1311,7 @@
                 console.error('Error retrying voice note:', error);
                 markVoiceNoteFailed(tempId);
             } finally {
-                state.isSending = false;
-                elements.sendButton.disabled = false;
+                setSendingState(false);
                 updateComposerMode();
             }
         }
@@ -1176,11 +1348,118 @@
             return data.attachment;
         }
 
+        async function uploadImage(file, messageId) {
+            const formData = new FormData();
+            formData.append('File', file);
+            formData.append('ConversationId', state.conversationId);
+            formData.append('MessageId', messageId);
+
+            const response = await fetch(`${CONFIG.API_BASE}/chat/upload-image`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to upload image');
+            }
+
+            const data = await response.json();
+            if (!data || !data.success || !data.attachment) {
+                throw new Error('Image upload failed');
+            }
+
+            return data.attachment;
+        }
+
+        async function uploadImages(files, messageId) {
+            const uploads = files.map(file => uploadImage(file, messageId));
+            return Promise.all(uploads);
+        }
+
+        async function sendMessageWithImages(message, imageItems) {
+            if (state.isSending) return;
+            const hasMessage = message.trim().length > 0;
+            if (!hasMessage && imageItems.length === 0) return;
+
+            setSendingState(true);
+
+            const tempId = `temp-${Date.now()}`;
+            const uploadId = generateUUID();
+            const optimisticAttachments = {
+                images: imageItems.map(item => ({
+                    url: item.previewUrl,
+                    loading: true,
+                    original_file_name: item.file.name
+                }))
+            };
+
+            appendMessage(message, 'user', tempId, true, null, optimisticAttachments);
+            const optimisticMsg = elements.chatMessages.querySelector(`[data-message-id="${tempId}"]`);
+            if (optimisticMsg) {
+                optimisticMsg.dataset.optimisticImages = 'true';
+            }
+
+            state.pendingImageUploads.set(tempId, {
+                files: imageItems.map(item => item.file),
+                previewUrls: imageItems.map(item => item.previewUrl)
+            });
+
+            state.pendingImages = [];
+            renderComposerImages();
+            elements.chatInput.value = '';
+            elements.chatInput.style.height = 'auto';
+            updateComposerMode();
+
+            try {
+                const uploads = await uploadImages(imageItems.map(item => item.file), uploadId);
+                const attachments = JSON.stringify({ images: uploads });
+
+                const response = await fetch(`${CONFIG.API_BASE}/chat/generate-response`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        agentId: state.agentId,
+                        conversationId: state.conversationId,
+                        message: message,
+                        messageType: 0,
+                        senderId: state.guestId,
+                        senderRole: 1,
+                        attachments: attachments
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to send message');
+                }
+            } catch (error) {
+                console.error('Error sending message with images:', error);
+                showError('Failed to send message. Please try again.');
+
+                const optimisticNode = elements.chatMessages.querySelector(`[data-message-id="${tempId}"]`);
+                if (optimisticNode) {
+                    optimisticNode.remove();
+                }
+
+                const pending = state.pendingImageUploads.get(tempId);
+                if (pending) {
+                    pending.previewUrls.forEach(url => URL.revokeObjectURL(url));
+                    state.pendingImageUploads.delete(tempId);
+                }
+            } finally {
+                setSendingState(false);
+                elements.chatInput.value = '';
+                elements.chatInput.style.height = 'auto';
+                elements.chatInput.focus();
+                updateComposerMode();
+            }
+        }
+
         async function sendVoiceNote(audioBlob, durationSec) {
             if (state.isSending) return;
 
-            state.isSending = true;
-            elements.sendButton.disabled = true;
+            setSendingState(true);
             setSendButtonMode('record');
             elements.sendButton.classList.remove('recording');
 
@@ -1229,8 +1508,7 @@
                 markVoiceNoteFailed(tempId);
                 showError('Failed to send voice note. Please try again.');
             } finally {
-                state.isSending = false;
-                elements.sendButton.disabled = false;
+                setSendingState(false);
                 elements.chatInput.focus();
                 hideRecordingIndicator();
                 updateComposerMode();
@@ -1245,8 +1523,12 @@
                 return;
             }
 
-            if (message) {
-                sendMessage(message);
+            if (message || state.pendingImages.length > 0) {
+                if (state.pendingImages.length > 0) {
+                    sendMessageWithImages(message, state.pendingImages.slice());
+                } else {
+                    sendMessage(message);
+                }
                 return;
             }
 
@@ -1256,7 +1538,7 @@
         function handleInputKeyPress(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (elements.chatInput.value.trim()) {
+                if (elements.chatInput.value.trim() || state.pendingImages.length > 0) {
                     handleSendClick();
                 }
             }
@@ -1304,6 +1586,8 @@
                 elements.chatInput.addEventListener('input', handleInputChange);
                 elements.newConversationBtn.addEventListener('click', handleNewConversationClick);
                 elements.cancelRecordingBtn.addEventListener('click', cancelRecording);
+                elements.attachImageBtn.addEventListener('click', () => elements.imageInput.click());
+                elements.imageInput.addEventListener('change', handleImageSelect);
                 updateComposerMode();
 
                 const setViewportHeightVar = () => {

@@ -371,6 +371,99 @@ body::before {
     align-items: stretch;
 }
 
+.attach-button {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    border: none;
+    background: rgba(15, 23, 42, 0.08);
+    color: #0a7fa6;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 1;
+}
+
+.attach-button svg {
+    width: 16px;
+    height: 16px;
+}
+
+.attach-button svg path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.composer-attachments {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: -58px;
+    display: none;
+    gap: 6px;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow-x: auto;
+}
+
+.composer-attachments.active {
+    display: flex;
+}
+
+.composer-image {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    overflow: hidden;
+    flex: 0 0 auto;
+}
+
+.composer-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.composer-image-remove {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    border: none;
+    background: rgba(15, 23, 42, 0.75);
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.composer-image-remove svg {
+    width: 12px;
+    height: 12px;
+}
+
+.composer-image-remove svg path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
 .recording-cancel {
     position: absolute;
     left: 8px;
@@ -410,7 +503,7 @@ body::before {
     flex: 1;
     padding: 14px 16px;
     padding-right: 60px;
-    padding-left: 16px;
+    padding-left: 48px;
     border-radius: 18px;
     border: none;
     font-size: var(--body-md);
@@ -483,6 +576,11 @@ body::before {
     left: 46px;
 }
 
+.input-wrapper.recording-active .attach-button {
+    opacity: 0;
+    pointer-events: none;
+}
+
 .input-wrapper.recording-active .recording-cancel {
     opacity: 1;
     pointer-events: auto;
@@ -553,6 +651,15 @@ body::before {
     display: none;
 }
 
+.send-button .icon-loading {
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #ffffff;
+    animation: spin 0.8s linear infinite;
+}
+
 .send-button.mode-send .icon-send,
 .send-button.mode-record .icon-mic {
     display: block;
@@ -560,6 +667,15 @@ body::before {
 
 .send-button.recording {
     background: linear-gradient(135deg, #0da3cf, #0a7fa6);
+}
+
+.send-button.sending .icon-send,
+.send-button.sending .icon-mic {
+    display: none;
+}
+
+.send-button.sending .icon-loading {
+    display: block;
 }
 
 .input-wrapper.has-text .send-button {
@@ -688,6 +804,61 @@ body::before {
     padding: 4px 10px;
     font-size: 0.7rem;
     cursor: pointer;
+}
+
+.message-images {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+}
+
+.message-image {
+    width: 120px;
+    height: 86px;
+    border-radius: 12px;
+    overflow: hidden;
+    flex: 0 0 auto;
+    background: rgba(255, 255, 255, 0.3);
+    position: relative;
+}
+
+.message-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.message-image.loading img {
+    opacity: 0.6;
+    filter: saturate(0.6);
+}
+
+.message-image.loading::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.05));
+    background-size: 200% 100%;
+    animation: shimmer 1.2s ease-in-out infinite;
+}
+
+.message-image.loading::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-top-color: rgba(255, 255, 255, 0.9);
+    border-radius: inherit;
+    animation: spin 0.9s linear infinite;
+    width: 20px;
+    height: 20px;
+    margin: auto;
+}
+
+.message-image.error::after,
+.message-image.error::before {
+    content: none;
 }
 
 .error-message {
@@ -831,6 +1002,15 @@ body::before {
     100% {
         transform: translateX(-10%);
         opacity: 0.4;
+    }
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
     }
 }
 
