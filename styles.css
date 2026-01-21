@@ -891,7 +891,7 @@ body::before {
     .chat-shell {
         top: 140px;
         position: relative;
-        height: calc(100vh - 140px);
+        height: calc(var(--vvh, 100vh) - 140px);
         min-height: 0;
     }
 
@@ -905,6 +905,7 @@ body::before {
         min-height: 0;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
     }
 
     .chat-input-area {

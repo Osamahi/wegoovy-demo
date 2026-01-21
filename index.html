@@ -1322,6 +1322,7 @@
                                 0,
                                 window.innerHeight - viewport.height - viewport.offsetTop
                             );
+                            document.documentElement.style.setProperty('--vvh', `${viewport.height}px`);
                             inputArea.style.bottom = `${keyboardHeight}px`;
 
                             if (keyboardHeight < 20 && savedScrollY !== null && document.activeElement !== elements.chatInput) {
