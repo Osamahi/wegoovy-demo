@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
     <title>Wegovy - AI Assistant</title>
     <link rel="icon" href="favicon.ico">
 
@@ -558,6 +558,46 @@
                 elements.chatInput.addEventListener('keypress', handleInputKeyPress);
                 elements.chatInput.addEventListener('input', handleInputChange);
                 elements.newConversationBtn.addEventListener('click', handleNewConversationClick);
+
+                // Mobile keyboard handling
+                if (/mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent)) {
+                    let originalHeight = window.innerHeight;
+
+                    // Handle viewport resize when keyboard opens/closes
+                    window.addEventListener('resize', () => {
+                        const currentHeight = window.innerHeight;
+                        if (currentHeight < originalHeight * 0.8) {
+                            // Keyboard is likely open
+                            document.body.style.height = `${currentHeight}px`;
+                        } else {
+                            // Keyboard is likely closed
+                            document.body.style.height = '';
+                            originalHeight = currentHeight;
+                        }
+                    });
+
+                    // Scroll input into view when focused
+                    elements.chatInput.addEventListener('focus', () => {
+                        setTimeout(() => {
+                            elements.chatInput.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'nearest'
+                            });
+                            // Scroll to bottom of messages
+                            elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+                        }, 300);
+                    });
+
+                    // Ensure input stays visible when user types
+                    elements.chatInput.addEventListener('input', () => {
+                        if (document.activeElement === elements.chatInput) {
+                            setTimeout(() => {
+                                elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+                            }, 100);
+                        }
+                    });
+                }
+
                 elements.chatInput.focus();
 
             } catch (error) {

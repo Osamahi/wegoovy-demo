@@ -13,7 +13,7 @@
     font-style: normal;
     font-weight: 400;
     font-display: swap;
-    src: url("https://www.wegovy.com/etc.clientlibs/phoenix/clientlibs-generated/phx-page-v1-site/resources/ApisWeb-Regular.woff2") format("woff2");
+    src: url("./fonts/ApisWeb-Regular.woff2") format("woff2");
 }
 
 @font-face {
@@ -21,7 +21,7 @@
     font-style: normal;
     font-weight: 500;
     font-display: swap;
-    src: url("https://www.wegovy.com/etc.clientlibs/phoenix/clientlibs-generated/phx-page-v1-site/resources/ApisWeb-Medium.woff2") format("woff2");
+    src: url("./fonts/ApisWeb-Medium.woff2") format("woff2");
 }
 
 @font-face {
@@ -29,7 +29,7 @@
     font-style: normal;
     font-weight: 600;
     font-display: swap;
-    src: url("https://www.wegovy.com/etc.clientlibs/phoenix/clientlibs-generated/phx-page-v1-site/resources/ApisWeb-Bold.woff2") format("woff2");
+    src: url("./fonts/ApisWeb-Bold.woff2") format("woff2");
 }
 
 * {
@@ -200,7 +200,7 @@ body::before {
 
 .chat-messages {
     flex: 1;
-    padding: 18px 20px 12px;
+    padding: 18px 20px 100px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -354,6 +354,9 @@ body::before {
 .chat-input-area {
     padding: 14px 16px 18px;
     background: transparent;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
 }
 
 .input-wrapper {
@@ -367,7 +370,7 @@ body::before {
     padding: 14px 16px;
     padding-right: 60px;
     border-radius: 18px;
-    border: 1px solid rgba(13, 163, 207, 0.16);
+    border: none;
     font-size: var(--body-md);
     line-height: var(--body-md-line);
     resize: none;
@@ -380,8 +383,7 @@ body::before {
 
 .chat-input:focus {
     outline: none;
-    border-color: #0da3cf;
-    box-shadow: 0 0 0 3px rgba(13, 163, 207, 0.12);
+    box-shadow: 0 0 0 3px rgba(13, 163, 207, 0.12), 0 10px 24px rgba(15, 23, 42, 0.08);
 }
 
 .send-button {
@@ -603,10 +605,17 @@ body::before {
     }
 
     .blank-rectangle {
-        height: 100vh;
+        height: 100dvh;
         width: 100vw;
         border-radius: 0;
         box-shadow: none;
+    }
+
+    /* Fallback for browsers that don't support dvh */
+    @supports not (height: 100dvh) {
+        .blank-rectangle {
+            height: 100vh;
+        }
     }
 
     .logo {
@@ -622,5 +631,15 @@ body::before {
     .new-chat-btn {
         font-size: var(--body-xs);
         padding: 6px 10px;
+    }
+
+    .chat-messages {
+        padding-bottom: 120px;
+    }
+
+    .chat-input-area {
+        position: sticky;
+        bottom: 0;
+        background: transparent;
     }
 }
