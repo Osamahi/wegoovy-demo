@@ -628,6 +628,9 @@ body::before {
 
     .chat-shell {
         top: 140px;
+        position: relative;
+        height: auto;
+        min-height: calc(100vh - 140px);
     }
 
     .new-chat-btn {
@@ -640,24 +643,24 @@ body::before {
     }
 
     .chat-input-area {
-        position: fixed;
-        bottom: 0;
+        position: sticky;
+        bottom: env(keyboard-inset-height, 0);
         left: 0;
         right: 0;
         background: transparent;
         padding-bottom: calc(18px + env(safe-area-inset-bottom));
         z-index: 100;
+        margin-top: auto;
     }
 
     body {
-        position: fixed;
+        position: relative;
         width: 100%;
-        height: 100vh;
-        overflow: hidden;
+        min-height: 100vh;
+        overscroll-behavior: contain;
     }
 
     .canvas {
-        height: 100vh;
-        overflow: hidden;
+        min-height: 100vh;
     }
 }
