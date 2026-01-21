@@ -653,6 +653,11 @@ body::before {
         margin-top: auto;
     }
 
+    .chat-input-area.keyboard-aware {
+        position: fixed;
+        bottom: 0;
+    }
+
     body {
         position: relative;
         width: 100%;

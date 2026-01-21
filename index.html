@@ -564,72 +564,68 @@
                 // Mobile keyboard handling
                 if (/mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent)) {
                     const inputArea = document.querySelector('.chat-input-area');
+                    const hasVisualViewport = !!window.visualViewport;
 
-                    // Aggressive scroll into view on focus
-                    elements.chatInput.addEventListener('focus', (e) => {
-                        // Immediate scroll
-                        e.target.scrollIntoView({ behavior: 'auto', block: 'center' });
-
-                        // Delayed scroll to account for keyboard animation
-                        setTimeout(() => {
-                            e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }, 100);
-
-                        setTimeout(() => {
-                            e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }, 300);
-
-                        setTimeout(() => {
-                            e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }, 500);
-                    });
-
-                    // Use Visual Viewport API if available (Chrome/Android)
-                    if (window.visualViewport) {
+                    if (hasVisualViewport) {
+                        inputArea.classList.add('keyboard-aware');
                         const viewport = window.visualViewport;
-                        let keyboardVisible = false;
+                        let updateTimer = null;
 
-                        function handleViewportChange() {
-                            const keyboardHeight = window.innerHeight - viewport.height;
+                        function updateInputPosition() {
+                            const keyboardHeight = Math.max(
+                                0,
+                                window.innerHeight - viewport.height - viewport.offsetTop
+                            );
+                            inputArea.style.bottom = `${keyboardHeight}px`;
+                        }
 
-                            if (keyboardHeight > 100) {
-                                // Keyboard is open
-                                if (!keyboardVisible) {
-                                    keyboardVisible = true;
-                                    // Ensure input is visible
-                                    setTimeout(() => {
-                                        if (document.activeElement === elements.chatInput) {
-                                            elements.chatInput.scrollIntoView({
-                                                behavior: 'smooth',
-                                                block: 'center'
-                                            });
-                                        }
-                                    }, 100);
-                                }
-                            } else {
-                                keyboardVisible = false;
+                        function scheduleInputPositionUpdate() {
+                            if (updateTimer) {
+                                clearTimeout(updateTimer);
+                            }
+                            updateTimer = setTimeout(updateInputPosition, 50);
+                        }
+
+                        function clearPendingViewportUpdate() {
+                            if (updateTimer) {
+                                clearTimeout(updateTimer);
+                                updateTimer = null;
                             }
                         }
 
-                        viewport.addEventListener('resize', handleViewportChange);
-                        viewport.addEventListener('scroll', handleViewportChange);
-                    }
-
-                    // iOS-specific: Monitor window height changes
-                    let lastWindowHeight = window.innerHeight;
-                    window.addEventListener('resize', () => {
-                        const currentHeight = window.innerHeight;
-                        if (currentHeight < lastWindowHeight && document.activeElement === elements.chatInput) {
-                            // Keyboard opened on iOS
+                        updateInputPosition();
+                        viewport.addEventListener('resize', scheduleInputPositionUpdate);
+                        viewport.addEventListener('scroll', scheduleInputPositionUpdate);
+                        window.addEventListener('orientationchange', scheduleInputPositionUpdate);
+                        window.addEventListener('pagehide', clearPendingViewportUpdate);
+                        document.addEventListener('visibilitychange', () => {
+                            if (document.hidden) {
+                                clearPendingViewportUpdate();
+                            }
+                        });
+                    } else {
+                        // Fallback: minimal scroll into view on focus
+                        elements.chatInput.addEventListener('focus', (e) => {
                             setTimeout(() => {
-                                elements.chatInput.scrollIntoView({
-                                    behavior: 'smooth',
-                                    block: 'center'
-                                });
+                                e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
                             }, 100);
-                        }
-                        lastWindowHeight = currentHeight;
-                    });
+                        });
+
+                        // iOS-specific: Monitor window height changes
+                        let lastWindowHeight = window.innerHeight;
+                        window.addEventListener('resize', () => {
+                            const currentHeight = window.innerHeight;
+                            if (currentHeight < lastWindowHeight && document.activeElement === elements.chatInput) {
+                                setTimeout(() => {
+                                    elements.chatInput.scrollIntoView({
+                                        behavior: 'smooth',
+                                        block: 'center'
+                                    });
+                                }, 100);
+                            }
+                            lastWindowHeight = currentHeight;
+                        });
+                    }
                 }
 
                 elements.chatInput.focus();
