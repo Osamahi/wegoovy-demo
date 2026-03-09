@@ -15,13 +15,49 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="canvas">
+    <!-- Login Screen -->
+    <div class="login-screen" id="loginScreen">
+        <div class="login-card">
+            <img src="wegovy_hd.png" alt="Wegovy" class="login-logo">
+            <form id="loginForm" class="login-form" autocomplete="off">
+                <div class="login-field">
+                    <input type="text" id="loginUsername" class="login-input" placeholder="Username" required autocomplete="off">
+                </div>
+                <div class="login-field">
+                    <input type="password" id="loginPassword" class="login-input" placeholder="Password" required autocomplete="off">
+                </div>
+                <div class="login-error" id="loginError"></div>
+                <button type="submit" class="login-button">Sign In</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="canvas" id="appCanvas" style="display:none;">
         <div class="blank-rectangle" aria-label="Chat rectangle">
             <div class="top-controls">
-                <button id="newConversationBtn" class="new-chat-btn" type="button" aria-label="Start a new chat" title="New conversation">
-                    <span class="new-chat-label">New</span>
-                    <span class="new-chat-plus" aria-hidden="true">+</span>
-                </button>
+                <div class="menu-wrapper" id="menuWrapper">
+                    <button id="menuBtn" class="menu-btn" type="button" aria-label="Menu" title="Menu">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                            <rect x="3" y="4" width="14" height="2" rx="1" fill="currentColor"/>
+                            <rect x="3" y="9" width="14" height="2" rx="1" fill="currentColor"/>
+                            <rect x="3" y="14" width="14" height="2" rx="1" fill="currentColor"/>
+                        </svg>
+                    </button>
+                    <div class="menu-dropdown" id="menuDropdown">
+                        <button id="newConversationBtn" class="menu-item" type="button">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            New Chat
+                        </button>
+                        <button id="logoutBtn" class="menu-item menu-item-logout" type="button">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                <path d="M6 2H4a2 2 0 00-2 2v8a2 2 0 002 2h2M10 12l4-4-4-4M14 8H6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            Log Out
+                        </button>
+                    </div>
+                </div>
             </div>
             <img src="wegovy_hd.png" alt="Wegovy" class="logo">
             <img src="top.png" alt="" class="top-band" aria-hidden="true">
@@ -98,6 +134,50 @@
             SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc3l5a3RhcWFoZGZtZWhrZHhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM2MjUyNjYsImV4cCI6MjA2OTIwMTI2Nn0.6loB-m_y5To_zk3Inb7wvXSC00OOZ3FhMMTJMfdGlfg'
         };
 
+        // --- Auth (SHA-256 hashed credentials) ---
+        const AUTH_HASHES = {
+            u: '3abec5322e08c115c371b3312cc0d679aac5115de760b11d5a74a9fa3bf9f18c',
+            p: '9c73bee6a58f5033c72a5b7aff12bf760eb47fa004d849d093d09d3b6d34f49e'
+        };
+        const AUTH_SESSION_KEY = 'wegovy_authenticated';
+
+        async function sha256(text) {
+            const data = new TextEncoder().encode(text);
+            const hash = await crypto.subtle.digest('SHA-256', data);
+            return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function isAuthenticated() {
+            return localStorage.getItem(AUTH_SESSION_KEY) === 'true';
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const errorEl = document.getElementById('loginError');
+
+            const [uHash, pHash] = await Promise.all([sha256(username), sha256(password)]);
+
+            if (uHash === AUTH_HASHES.u && pHash === AUTH_HASHES.p) {
+                localStorage.setItem(AUTH_SESSION_KEY, 'true');
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('appCanvas').style.display = '';
+                initialize();
+            } else {
+                errorEl.textContent = 'Invalid username or password';
+                errorEl.classList.add('active');
+            }
+        }
+
+        // Check auth on load
+        if (isAuthenticated()) {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('appCanvas').style.display = '';
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', handleLogin);
+
         const state = {
             conversationId: null,
             agentId: null,
@@ -142,7 +222,11 @@
             errorMessage: document.getElementById('errorMessage'),
             loadingOverlay: document.getElementById('loadingOverlay'),
             loadingText: document.getElementById('loadingText'),
-            newConversationBtn: document.getElementById('newConversationBtn')
+            newConversationBtn: document.getElementById('newConversationBtn'),
+            menuBtn: document.getElementById('menuBtn'),
+            menuDropdown: document.getElementById('menuDropdown'),
+            menuWrapper: document.getElementById('menuWrapper'),
+            logoutBtn: document.getElementById('logoutBtn')
         };
 
         function generateUUID() {
@@ -662,8 +746,7 @@
         }
 
         function updateNewChatVisibility() {
-            const messageCount = elements.chatMessages.querySelectorAll('.message').length;
-            elements.newConversationBtn.classList.toggle('visible', messageCount > 2);
+            elements.menuBtn.classList.add('visible');
         }
 
         async function startNewConversation() {
@@ -1553,8 +1636,26 @@
         }
 
         function handleNewConversationClick() {
+            elements.menuDropdown.classList.remove('open');
             startNewConversation();
         }
+
+        function handleLogout() {
+            elements.menuDropdown.classList.remove('open');
+            localStorage.removeItem(AUTH_SESSION_KEY);
+            localStorage.removeItem('mojeeb_conversation_id');
+            location.reload();
+        }
+
+        function toggleMenu() {
+            elements.menuDropdown.classList.toggle('open');
+        }
+
+        document.addEventListener('click', function(e) {
+            if (!elements.menuWrapper.contains(e.target)) {
+                elements.menuDropdown.classList.remove('open');
+            }
+        });
 
         async function initialize() {
             try {
@@ -1585,6 +1686,8 @@
                 elements.chatInput.addEventListener('keypress', handleInputKeyPress);
                 elements.chatInput.addEventListener('input', handleInputChange);
                 elements.newConversationBtn.addEventListener('click', handleNewConversationClick);
+                elements.menuBtn.addEventListener('click', toggleMenu);
+                elements.logoutBtn.addEventListener('click', handleLogout);
                 elements.cancelRecordingBtn.addEventListener('click', cancelRecording);
                 elements.attachImageBtn.addEventListener('click', () => elements.imageInput.click());
                 elements.imageInput.addEventListener('change', handleImageSelect);
@@ -1694,10 +1797,12 @@
             }
         }
 
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initialize);
-        } else {
-            initialize();
+        if (isAuthenticated()) {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initialize);
+            } else {
+                initialize();
+            }
         }
     </script>
 </body>
